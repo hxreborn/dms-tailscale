@@ -1,34 +1,23 @@
-# DMS Tailscale
+# Tailscale Plugin
 
-A simple DankMaterialShell (DMS) Bar widget for toggling your Tailscale connection. Requires the [Tailscale cli](https://tailscale.com/kb/1080/cli) to be installed, as well as any initial authentication to be configured. As Tailscale persists auth, after an initial successful authentication session, this plugin can run without requiring any sensitive information.
+A Tailscale VPN manager plugin for [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell). Monitor connection status, browse peers, and manage your tailnet from the bar.
 
----
+![Preview of the Tailscale plugin](screenshot.png)
 
-![Screenshot](./plugin-notif.png)
+> **Disclaimer:** This is a community-created plugin built on top of the Tailscale CLI tool. It is not affiliated with, endorsed by, or officially connected to Tailscale Inc.
 
-## Installation
+## Requirements
 
-```
-mkdir -p ~/.config/DankMaterialShell/plugins/
-git clone https://github.com/cglavin50/dms-tailscale
-```
+- [Tailscale](https://tailscale.com/) installed and authenticated
+- `wl-copy` (from `wl-clipboard`) for clipboard operations
+- A terminal emulator for SSH/Ping actions (configured in settings)
 
-## Configuration
+## Credits
 
-1. Install [Tailscale](https://tailscale.com/kb/1031/install-linux)
-    - `curl -fsSL https://tailscale.com/install.sh | sh`
-2. Run an initial authentication session (once only):
-    - `tailscale up` and follow the provided url
+- [Cooper Glavin](https://github.com/cglavin50) - Original DMS Tailscale widget and repo
+- [nineluj](https://github.com/nineluj) - [Noctalia Tailscale plugin](https://github.com/noctalia-dev/noctalia-plugins/tree/main/tailscale) with peer list, panel UI, and settings architecture
+- [hxreborn](https://github.com/hxreborn) - DMS port, context menu, visual polish
 
-That's it! After a successful auth, the plugin can handle the rest.
+## License
 
-## Permissions
-
-This plugin requires:
-
-- `settings_read` - To read plugin configurations
-- `settings_write` - To save plugin configurations
-
-## Contributing
-
-Feel free to fork, open issues, or PRs. If additional functionality is required I'm happy to add it :)
+MIT

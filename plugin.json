@@ -1,11 +1,12 @@
 {
   "id": "tailscale",
   "name": "Tailscale Manager",
-  "description": "Widget for managing tailscale connection",
-  "version": "1.0.0",
-  "author": "Cooper Glavin",
+  "description": "Monitor your tailnet, browse peers, copy IPs, SSH into devices, and toggle connectivity from the bar",
+  "version": "2.0.0",
+  "author": "Cooper Glavin, nineluj, hxreborn",
   "icon": "widgets",
   "type": "widget",
+  "capabilities": ["dankbar-widget"],
   "component": "./TailscaleWidget.qml",
   "settings": "./TailscaleSettings.qml",
   "permissions": ["settings_read", "settings_write"]

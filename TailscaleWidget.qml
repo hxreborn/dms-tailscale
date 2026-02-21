@@ -1,113 +1,238 @@
 import QtQuick
+import Quickshell
+import Quickshell.Io
 import qs.Common
 import qs.Services
 import qs.Widgets
 import qs.Modules.Plugins
-import Quickshell.Io
+import "."
 
 PluginComponent {
     id: root
 
-    property bool isConnected: false
-    property int refreshInterval: pluginData.refreshInterval || 5
+    property bool tailscaleInstalled: false
+    property bool tailscaleRunning: false
+    property string tailscaleIp: ""
+    property string tailscaleHostname: ""
+    property int peerCount: 0
+    property string lastToggleAction: ""
+    property var peerList: []
+    property var exitNodeStatus: null
 
-    Timer {
-        interval: root.refreshInterval * 1000
-        running: true
-        repeat: true
-        onTriggered: statusCheck.running = true
+    readonly property int refreshInterval: pluginData?.refreshInterval ?? 5
+    readonly property bool showIpAddress: pluginData?.showIpAddress ?? true
+    readonly property bool showPeerCount: pluginData?.showPeerCount ?? true
+    readonly property bool hideDisconnected: pluginData?.hideDisconnected ?? false
+    readonly property string terminalCommand: pluginData?.terminalCommand ?? ""
+    readonly property int pingCount: pluginData?.pingCount ?? 5
+    readonly property string defaultPeerAction: pluginData?.defaultPeerAction ?? "copy-ip"
+
+    function filterIPv4(ips) {
+        if (!ips || !ips.length) return [];
+        return ips.filter(function(ip) { return ip.startsWith("100."); });
     }
 
     Process {
-        id: statusCheck
-        command: ["tailscale", "status", "--json"]
-        running: true
+        id: whichProcess
+        stdout: StdioCollector {}
+        stderr: StdioCollector {}
 
-        property string caller: ""
-
-        stdout: StdioCollector {
-            id: outputCollector
-            onStreamFinished: {
-                try {
-                    const data = JSON.parse(this.text);
-                    root.isConnected = data.BackendState === "Running";
-                } catch (e) {
-                    root.isConnected = false;
-                    ToastService.showError("Error reading tailscale output");
-                }
-
-                statusCheck.running = false;
-            }
+        onExited: function(exitCode, exitStatus) {
+            root.tailscaleInstalled = (exitCode === 0);
+            updateTailscaleStatus();
         }
+    }
 
-        onExited: {
-            if (caller == "toggle") {
-                const output = root.isConnected ? "Tailscale Connected" : "Tailscale Disconnected";
-                ToastService.showInfo(output);
+    Process {
+        id: statusProcess
+        stdout: StdioCollector {}
+        stderr: StdioCollector {}
+
+        onExited: function(exitCode, exitStatus) {
+            var stdout = String(statusProcess.stdout.text || "").trim();
+
+            if (exitCode === 0 && stdout && stdout.length > 0) {
+                try {
+                    var data = JSON.parse(stdout);
+                    root.tailscaleRunning = data.BackendState === "Running";
+
+                    if (root.tailscaleRunning && data.Self && data.Self.TailscaleIPs && data.Self.TailscaleIPs.length > 0) {
+                        root.tailscaleIp = filterIPv4(data.Self.TailscaleIPs)[0] || data.Self.TailscaleIPs[0];
+                        root.tailscaleHostname = data.Self.HostName || "";
+
+                        var peers = [];
+                        if (data.Peer) {
+                            for (var peerId in data.Peer) {
+                                var peer = data.Peer[peerId];
+                                var ipv4s = filterIPv4(peer.TailscaleIPs);
+                                peers.push({
+                                    "HostName": peer.HostName,
+                                    "DNSName": peer.DNSName,
+                                    "TailscaleIPs": ipv4s,
+                                    "Online": peer.Online,
+                                    "OS": peer.OS,
+                                    "Tags": peer.Tags || []
+                                });
+                            }
+                        }
+                        root.peerList = peers;
+                        root.peerCount = peers.length;
+
+                        if (data.ExitNodeStatus) {
+                            root.exitNodeStatus = {
+                                "ID": data.ExitNodeStatus.ID || "",
+                                "Online": data.ExitNodeStatus.Online || false,
+                                "TailscaleIPs": data.ExitNodeStatus.TailscaleIPs || []
+                            };
+                        } else {
+                            root.exitNodeStatus = null;
+                        }
+                    } else {
+                        root.tailscaleIp = "";
+                        root.tailscaleHostname = "";
+                        root.peerCount = 0;
+                        root.peerList = [];
+                        root.exitNodeStatus = null;
+                    }
+                } catch (e) {
+                    console.error("Tailscale: Failed to parse status: " + e);
+                    root.tailscaleRunning = false;
+                    root.tailscaleHostname = "";
+                    root.peerList = [];
+                }
+            } else {
+                root.tailscaleRunning = false;
+                root.tailscaleIp = "";
+                root.tailscaleHostname = "";
+                root.peerCount = 0;
+                root.peerList = [];
             }
-            caller = "";
         }
     }
 
     Process {
         id: toggleProcess
-
-        onExited: (code, status) => {
-            statusCheck.caller = "toggle";
-            statusCheck.running = true;
+        onExited: function(exitCode, exitStatus) {
+            if (exitCode === 0) {
+                var message = root.lastToggleAction === "connect"
+                    ? "Tailscale connected"
+                    : "Tailscale disconnected";
+                ToastService.showInfo(message);
+            }
+            statusDelayTimer.start();
         }
     }
 
+    Timer {
+        id: statusDelayTimer
+        interval: 500
+        repeat: false
+        onTriggered: updateTailscaleStatus()
+    }
+
+    function checkTailscaleInstalled() {
+        whichProcess.command = ["which", "tailscale"];
+        whichProcess.running = true;
+    }
+
+    function updateTailscaleStatus() {
+        if (!root.tailscaleInstalled) {
+            root.tailscaleRunning = false;
+            root.tailscaleIp = "";
+            root.tailscaleHostname = "";
+            root.peerCount = 0;
+            return;
+        }
+
+        statusProcess.command = ["tailscale", "status", "--json"];
+        statusProcess.running = true;
+    }
+
     function toggleTailscale() {
-        if (root.isConnected) {
+        if (!root.tailscaleInstalled) return;
+
+        if (root.tailscaleRunning) {
+            root.lastToggleAction = "disconnect";
             toggleProcess.command = ["tailscale", "down"];
         } else {
+            root.lastToggleAction = "connect";
             toggleProcess.command = ["tailscale", "up"];
         }
         toggleProcess.running = true;
     }
 
+    Timer {
+        id: updateTimer
+        interval: root.refreshInterval * 1000
+        repeat: true
+        running: true
+        triggeredOnStart: true
+
+        onTriggered: {
+            if (!root.tailscaleInstalled) {
+                checkTailscaleInstalled();
+            } else {
+                updateTailscaleStatus();
+            }
+        }
+    }
+
+    Component.onCompleted: {
+        checkTailscaleInstalled();
+    }
+
+    popoutWidth: 400
+    popoutHeight: 620
+
+    popoutContent: Component {
+        PopoutComponent {
+            headerText: "Tailscale"
+            detailsText: root.tailscaleRunning
+                ? (root.tailscaleHostname || root.tailscaleIp) + (root.showPeerCount && root.peerCount > 0 ? " · " + root.peerCount + " peers" : "")
+                : "Disconnected"
+            showCloseButton: true
+
+            TailscalePanel {
+                width: parent.width - Theme.spacingM * 2
+                anchors.horizontalCenter: parent.horizontalCenter
+                daemon: root
+            }
+        }
+    }
+
     horizontalBarPill: Component {
-        MouseArea {
-            implicitWidth: contentRow.implicitWidth
-            implicitHeight: contentRow.implicitHeight
-            cursorShape: Qt.PointingHandCursor
-            onClicked: toggleTailscale()
+        Row {
+            spacing: Theme.spacingXS
 
-            Row {
-                id: contentRow
-                spacing: Theme.spacingS
+            TailscaleIcon {
+                size: root.iconSize
+                color: root.tailscaleRunning ? Theme.primary : Theme.surfaceVariantText
+                crossed: !root.tailscaleRunning
+                anchors.verticalCenter: parent.verticalCenter
+            }
 
-                DankIcon {
-                    name: root.isConnected ? "vpn_key" : "vpn_key_off"
-                    size: Theme.iconSize - 6
-                    color: root.isConnected ? Theme.primary : Theme.surfaceText
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: root.showIcon
-                }
+            StyledText {
+                visible: root.showIpAddress && root.tailscaleRunning && root.tailscaleIp !== ""
+                text: root.tailscaleIp
+                font.pixelSize: Theme.fontSizeSmall
+                isMonospace: true
+                color: Theme.surfaceVariantText
+                anchors.verticalCenter: parent.verticalCenter
             }
         }
     }
 
     verticalBarPill: Component {
-        MouseArea {
-            implicitWidth: contentRow.implicitWidth
-            implicitHeight: contentRow.implicitHeight
-            cursorShape: Qt.PointingHandCursor
-            onClicked: toggleTailscale()
+        Column {
+            spacing: Theme.spacingXS
 
-            Column {
-                id: contentColumn
-                spacing: Theme.spacingS
-
-                DankIcon {
-                    name: root.isConnected ? "vpn_key" : "vpn_key_off"
-                    size: Theme.iconSize - 6
-                    color: root.isConnected ? Theme.primary : Theme.surfaceText
-                    anchors.verticalCenter: parent.verticalCenter
-                    visible: root.showIcon
-                }
+            TailscaleIcon {
+                size: root.iconSize
+                color: root.tailscaleRunning ? Theme.primary : Theme.surfaceVariantText
+                crossed: !root.tailscaleRunning
+                anchors.horizontalCenter: parent.horizontalCenter
             }
         }
     }
+
 }
