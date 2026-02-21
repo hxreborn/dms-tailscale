@@ -2,7 +2,7 @@
 
 A Tailscale VPN manager plugin for [DankMaterialShell](https://github.com/AvengeMedia/DankMaterialShell). Monitor connection status, browse peers, and manage your tailnet from the bar.
 
-![Preview of the Tailscale plugin](screenshot.png)
+![Preview of the Tailscale plugin](screenshot_01.png)
 
 > **Disclaimer:** This is a community-created plugin built on top of the Tailscale CLI tool. It is not affiliated with, endorsed by, or officially connected to Tailscale Inc.
 
