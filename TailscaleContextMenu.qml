@@ -9,8 +9,6 @@ Popup {
 
     property var peerData: null
     property bool isTerminalConfigured: false
-    property int selectedIndex: -1
-    property bool keyboardNavigation: false
 
     signal actionRequested(string action, var peer)
 
@@ -53,24 +51,15 @@ Popup {
         }
     ]
 
-    property int visibleItemCount: {
-        let count = 0;
-        for (let i = 0; i < menuItems.length; i++) {
-            if (menuItems[i].type !== "separator")
-                count++;
-        }
-        return count;
-    }
-
-    function show(x, y, fromKeyboard) {
-        let finalX = x;
-        let finalY = y;
+    function show(x, y) {
+        var finalX = x;
+        var finalY = y;
 
         if (contextMenu.parent) {
-            const parentWidth = contextMenu.parent.width;
-            const parentHeight = contextMenu.parent.height;
-            const menuWidth = contextMenu.width;
-            const menuHeight = contextMenu.height;
+            var parentWidth = contextMenu.parent.width;
+            var parentHeight = contextMenu.parent.height;
+            var menuWidth = contextMenu.width;
+            var menuHeight = contextMenu.height;
 
             if (finalX + menuWidth > parentWidth)
                 finalX = Math.max(0, parentWidth - menuWidth);
@@ -80,41 +69,7 @@ Popup {
 
         contextMenu.x = finalX;
         contextMenu.y = finalY;
-        keyboardNavigation = fromKeyboard || false;
-        selectedIndex = fromKeyboard ? 0 : -1;
         open();
-    }
-
-    function selectNext() {
-        if (visibleItemCount === 0)
-            return;
-        let current = selectedIndex;
-        let next = current;
-        do {
-            next = (next + 1) % menuItems.length;
-        } while (menuItems[next].type === "separator" && next !== current)
-        selectedIndex = next;
-    }
-
-    function selectPrevious() {
-        if (visibleItemCount === 0)
-            return;
-        let current = selectedIndex;
-        let prev = current;
-        do {
-            prev = (prev - 1 + menuItems.length) % menuItems.length;
-        } while (menuItems[prev].type === "separator" && prev !== current)
-        selectedIndex = prev;
-    }
-
-    function activateSelected() {
-        if (selectedIndex < 0 || selectedIndex >= menuItems.length)
-            return;
-        const item = menuItems[selectedIndex];
-        if (item.type === "separator" || !item.enabled)
-            return;
-        actionRequested(item.action, peerData);
-        close();
     }
 
     width: 200
@@ -125,14 +80,10 @@ Popup {
 
     onClosed: {
         closePolicy = Popup.CloseOnEscape;
-        keyboardNavigation = false;
-        selectedIndex = -1;
     }
 
     onOpened: {
         outsideClickTimer.start();
-        if (keyboardNavigation)
-            Qt.callLater(() => keyboardHandler.forceActiveFocus());
     }
 
     Timer {
@@ -150,41 +101,6 @@ Popup {
         radius: Theme.cornerRadius
         border.color: Qt.rgba(Theme.outline.r, Theme.outline.g, Theme.outline.b, 0.08)
         border.width: 1
-
-        Item {
-            id: keyboardHandler
-            anchors.fill: parent
-            focus: keyboardNavigation
-
-            Keys.onPressed: event => {
-                switch (event.key) {
-                case Qt.Key_Down:
-                case Qt.Key_J:
-                    keyboardNavigation = true;
-                    selectNext();
-                    event.accepted = true;
-                    return;
-                case Qt.Key_Up:
-                case Qt.Key_K:
-                    keyboardNavigation = true;
-                    selectPrevious();
-                    event.accepted = true;
-                    return;
-                case Qt.Key_Return:
-                case Qt.Key_Enter:
-                case Qt.Key_Space:
-                    activateSelected();
-                    event.accepted = true;
-                    return;
-                case Qt.Key_Escape:
-                case Qt.Key_Left:
-                case Qt.Key_H:
-                    close();
-                    event.accepted = true;
-                    return;
-                }
-            }
-        }
 
         Column {
             id: menuColumn
@@ -218,9 +134,6 @@ Popup {
                         color: {
                             if (!modelData.enabled)
                                 return "transparent";
-                            const isSelected = keyboardNavigation && selectedIndex === index;
-                            if (isSelected)
-                                return Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.2);
                             return menuItemArea.containsMouse ? Qt.rgba(Theme.primary.r, Theme.primary.g, Theme.primary.b, 0.12) : "transparent";
                         }
                         opacity: modelData.enabled ? 1 : 0.5
@@ -259,10 +172,6 @@ Popup {
                             hoverEnabled: true
                             cursorShape: modelData.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                             enabled: modelData.enabled ?? false
-                            onEntered: {
-                                keyboardNavigation = false;
-                                selectedIndex = index;
-                            }
                             onPressed: mouse => menuItemRipple.trigger(mouse.x, mouse.y)
                             onClicked: {
                                 actionRequested(modelData.action, peerData);
