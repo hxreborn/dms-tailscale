@@ -113,9 +113,18 @@ PluginSettings {
         description: "Action when clicking on a peer in the panel."
         defaultValue: "copy-ip"
         options: [
-            { label: "Copy IP", value: "copy-ip" },
-            { label: "SSH to host", value: "ssh" },
-            { label: "Ping host", value: "ping" }
+            {
+                label: "Copy IP",
+                value: "copy-ip"
+            },
+            {
+                label: "SSH to host",
+                value: "ssh"
+            },
+            {
+                label: "Ping host",
+                value: "ping"
+            }
         ]
     }
 }

@@ -18,6 +18,10 @@ Column {
 
     Process {
         id: clipboardProcess
+        onExited: function (exitCode) {
+            if (exitCode !== 0)
+                ToastService.showError("Failed to copy to clipboard");
+        }
     }
 
     Process {
@@ -25,18 +29,21 @@ Column {
     }
 
     property var sortedPeerList: {
-        if (!daemon?.peerList) return [];
+        if (!daemon?.peerList)
+            return [];
         var peers = daemon.peerList.slice();
 
         if (daemon.hideDisconnected) {
-            peers = peers.filter(function(peer) {
+            peers = peers.filter(function (peer) {
                 return peer.Online === true;
             });
         }
 
-        peers.sort(function(a, b) {
-            if (a.Online && !b.Online) return -1;
-            if (!a.Online && b.Online) return 1;
+        peers.sort(function (a, b) {
+            if (a.Online && !b.Online)
+                return -1;
+            if (!a.Online && b.Online)
+                return 1;
             var nameA = (a.HostName || a.DNSName || "").toLowerCase();
             var nameB = (b.HostName || b.DNSName || "").toLowerCase();
             return nameA.localeCompare(nameB);
@@ -50,52 +57,64 @@ Column {
     }
 
     function getOSIcon(os) {
-        if (!os) return "devices";
+        if (!os)
+            return "devices";
         switch (os.toLowerCase()) {
-            case "linux": return "terminal";
-            case "macos": return "desktop_mac";
-            case "ios": return "phone_iphone";
-            case "android": return "phone_android";
-            case "windows": return "laptop_windows";
-            default: return "devices";
+        case "linux":
+            return "terminal";
+        case "macos":
+            return "desktop_mac";
+        case "ios":
+            return "phone_iphone";
+        case "android":
+            return "phone_android";
+        case "windows":
+            return "laptop_windows";
+        default:
+            return "devices";
         }
     }
 
     function executePeerAction(action, peer) {
         var ips = daemon.filterIPv4(peer.TailscaleIPs);
-        if (ips.length === 0) return;
+        if (ips.length === 0)
+            return;
         var ip = ips[0];
 
         switch (action) {
-            case "copy-ip":
-                copyToClipboard(ip);
-                ToastService.showInfo("IP copied: " + ip);
-                break;
-            case "copy-hostname":
-                var hostname = peer.HostName || peer.DNSName || "Unknown";
-                copyToClipboard(hostname);
-                ToastService.showInfo("Hostname copied: " + hostname);
-                break;
-            case "ssh":
-                if (!isTerminalConfigured) {
-                    ToastService.showError("Terminal not configured - set it in plugin settings");
-                    return;
-                }
-                terminalProcess.command = [daemon.terminalCommand, "-e", "ssh", ip];
-                terminalProcess.running = true;
-                break;
-            case "ping":
-                if (!isTerminalConfigured) {
-                    ToastService.showError("Terminal not configured - set it in plugin settings");
-                    return;
-                }
-                terminalProcess.command = [daemon.terminalCommand, "-e", "ping", "-c", daemon.pingCount.toString(), ip];
-                terminalProcess.running = true;
-                break;
-            case "admin-console":
-                var dnsName = (peer.DNSName || "").replace(/\.$/, "");
-                Qt.openUrlExternally("https://login.tailscale.com/admin/machines/" + encodeURIComponent(dnsName));
-                break;
+        case "copy-ip":
+            copyToClipboard(ip);
+            ToastService.showInfo("IP copied: " + ip);
+            break;
+        case "copy-hostname":
+            var hostname = peer.HostName || peer.DNSName || "Unknown";
+            copyToClipboard(hostname);
+            ToastService.showInfo("Hostname copied: " + hostname);
+            break;
+        case "ssh":
+            if (!isTerminalConfigured) {
+                ToastService.showError("Terminal not configured - set it in plugin settings");
+                return;
+            }
+            var sshCmd = daemon.terminalCommand.trim().split(/\s+/);
+            sshCmd.push("-e", "ssh", ip);
+            terminalProcess.command = sshCmd;
+            terminalProcess.running = true;
+            break;
+        case "ping":
+            if (!isTerminalConfigured) {
+                ToastService.showError("Terminal not configured - set it in plugin settings");
+                return;
+            }
+            var pingCmd = daemon.terminalCommand.trim().split(/\s+/);
+            pingCmd.push("-e", "ping", "-c", daemon.pingCount.toString(), ip);
+            terminalProcess.command = pingCmd;
+            terminalProcess.running = true;
+            break;
+        case "admin-console":
+            var dnsName = (peer.DNSName || "").replace(/\.$/, "");
+            Qt.openUrlExternally("https://login.tailscale.com/admin/machines/" + encodeURIComponent(dnsName));
+            break;
         }
     }
 
@@ -192,7 +211,8 @@ Column {
 
                 StyledText {
                     text: {
-                        if (!daemon?.exitNodeStatus) return "";
+                        if (!daemon?.exitNodeStatus)
+                            return "";
                         var ipv4 = daemon.filterIPv4(daemon.exitNodeStatus.TailscaleIPs)[0];
                         var status = daemon.exitNodeStatus.Online ? "Online" : "Offline";
                         return ipv4 ? ipv4 + " · " + status : status;
@@ -342,7 +362,7 @@ Column {
                             acceptedButtons: Qt.LeftButton | Qt.RightButton
 
                             onPressed: mouse => peerRipple.trigger(mouse.x, mouse.y)
-                            onClicked: function(mouse) {
+                            onClicked: function (mouse) {
                                 if (mouse.button === Qt.LeftButton) {
                                     if (peerDelegate.peerIp) {
                                         root.executePeerAction(daemon.defaultPeerAction, peerDelegate.peerData);
@@ -350,7 +370,7 @@ Column {
                                 } else if (mouse.button === Qt.RightButton) {
                                     var pos = peerMouseArea.mapToItem(root, mouse.x, mouse.y);
                                     peerContextMenu.peerData = peerDelegate.peerData;
-                                    peerContextMenu.show(pos.x, pos.y, false);
+                                    peerContextMenu.show(pos.x, pos.y);
                                 }
                             }
                         }
@@ -438,13 +458,9 @@ Column {
         radius: Theme.cornerRadius
         color: {
             if (toggleMouseArea.containsMouse) {
-                return (daemon?.tailscaleRunning ?? false)
-                    ? Theme.withAlpha(Theme.error, 0.8)
-                    : Theme.withAlpha(Theme.primary, 0.8);
+                return (daemon?.tailscaleRunning ?? false) ? Theme.withAlpha(Theme.error, 0.8) : Theme.withAlpha(Theme.primary, 0.8);
             }
-            return (daemon?.tailscaleRunning ?? false)
-                ? Theme.error
-                : Theme.primary;
+            return (daemon?.tailscaleRunning ?? false) ? Theme.error : Theme.primary;
         }
         opacity: (daemon?.tailscaleInstalled ?? false) ? 1.0 : 0.5
 

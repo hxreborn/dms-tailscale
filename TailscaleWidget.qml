@@ -27,9 +27,21 @@ PluginComponent {
     readonly property int pingCount: pluginData?.pingCount ?? 5
     readonly property string defaultPeerAction: pluginData?.defaultPeerAction ?? "copy-ip"
 
+    function resetStatus() {
+        root.tailscaleRunning = false;
+        root.tailscaleIp = "";
+        root.tailscaleHostname = "";
+        root.peerCount = 0;
+        root.peerList = [];
+        root.exitNodeStatus = null;
+    }
+
     function filterIPv4(ips) {
-        if (!ips || !ips.length) return [];
-        return ips.filter(function(ip) { return ip.startsWith("100."); });
+        if (!ips || !ips.length)
+            return [];
+        return ips.filter(function (ip) {
+            return ip.startsWith("100.");
+        });
     }
 
     Process {
@@ -37,7 +49,7 @@ PluginComponent {
         stdout: StdioCollector {}
         stderr: StdioCollector {}
 
-        onExited: function(exitCode, exitStatus) {
+        onExited: function (exitCode, exitStatus) {
             root.tailscaleInstalled = (exitCode === 0);
             updateTailscaleStatus();
         }
@@ -48,7 +60,7 @@ PluginComponent {
         stdout: StdioCollector {}
         stderr: StdioCollector {}
 
-        onExited: function(exitCode, exitStatus) {
+        onExited: function (exitCode, exitStatus) {
             var stdout = String(statusProcess.stdout.text || "").trim();
 
             if (exitCode === 0 && stdout && stdout.length > 0) {
@@ -88,36 +100,32 @@ PluginComponent {
                             root.exitNodeStatus = null;
                         }
                     } else {
-                        root.tailscaleIp = "";
-                        root.tailscaleHostname = "";
-                        root.peerCount = 0;
-                        root.peerList = [];
-                        root.exitNodeStatus = null;
+                        resetStatus();
                     }
                 } catch (e) {
                     console.error("Tailscale: Failed to parse status: " + e);
-                    root.tailscaleRunning = false;
-                    root.tailscaleHostname = "";
-                    root.peerList = [];
+                    resetStatus();
                 }
             } else {
-                root.tailscaleRunning = false;
-                root.tailscaleIp = "";
-                root.tailscaleHostname = "";
-                root.peerCount = 0;
-                root.peerList = [];
+                resetStatus();
             }
         }
     }
 
     Process {
         id: toggleProcess
-        onExited: function(exitCode, exitStatus) {
+        stdout: StdioCollector {}
+        stderr: StdioCollector {}
+
+        onExited: function (exitCode, exitStatus) {
             if (exitCode === 0) {
-                var message = root.lastToggleAction === "connect"
-                    ? "Tailscale connected"
-                    : "Tailscale disconnected";
+                var message = root.lastToggleAction === "connect" ? "Tailscale connected" : "Tailscale disconnected";
                 ToastService.showInfo(message);
+            } else {
+                var stderr = String(toggleProcess.stderr.text || "").trim();
+                var excerpt = stderr.length > 120 ? stderr.substring(0, 120) + "..." : stderr;
+                if (excerpt)
+                    ToastService.showError("Tailscale: " + excerpt);
             }
             statusDelayTimer.start();
         }
@@ -137,10 +145,7 @@ PluginComponent {
 
     function updateTailscaleStatus() {
         if (!root.tailscaleInstalled) {
-            root.tailscaleRunning = false;
-            root.tailscaleIp = "";
-            root.tailscaleHostname = "";
-            root.peerCount = 0;
+            resetStatus();
             return;
         }
 
@@ -149,7 +154,8 @@ PluginComponent {
     }
 
     function toggleTailscale() {
-        if (!root.tailscaleInstalled) return;
+        if (!root.tailscaleInstalled)
+            return;
 
         if (root.tailscaleRunning) {
             root.lastToggleAction = "disconnect";
@@ -187,9 +193,7 @@ PluginComponent {
     popoutContent: Component {
         PopoutComponent {
             headerText: "Tailscale"
-            detailsText: root.tailscaleRunning
-                ? (root.tailscaleHostname || root.tailscaleIp) + (root.showPeerCount && root.peerCount > 0 ? " · " + root.peerCount + " peers" : "")
-                : "Disconnected"
+            detailsText: root.tailscaleRunning ? (root.tailscaleHostname || root.tailscaleIp) + (root.showPeerCount && root.peerCount > 0 ? " · " + root.peerCount + " peers" : "") : "Disconnected"
             showCloseButton: true
 
             TailscalePanel {
@@ -234,5 +238,4 @@ PluginComponent {
             }
         }
     }
-
 }
