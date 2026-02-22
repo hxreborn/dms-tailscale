@@ -487,6 +487,8 @@ Column {
         }
     }
 
+    Item { width: 1; height: Theme.spacingS }
+
     TailscaleContextMenu {
         id: peerContextMenu
         isTerminalConfigured: root.isTerminalConfigured
